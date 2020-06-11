@@ -127,7 +127,9 @@ def main(parameters=default_parameters, argv=None, verbose=True):
   config.add_link(
       Link(spRegion.name, tmRegion.name, 'bottomUpOut', 'bottomUpIn'))
   config.add_link(
-      Link(tmRegion.name, clsrRegion.name, 'bottomUpOut', 'pattern'))
+      Link(tmRegion.name, clsrRegion.name, 'activeCells', 'learnPattern'))
+  config.add_link(
+      Link(tmRegion.name, clsrRegion.name, 'predictiveCells', 'inferPattern'))
   config.add_link(Link(scalarRegion.name, clsrRegion.name, 'bucket', 'bucket'))
 
   net = Network(str(config), verbose=verbose)
