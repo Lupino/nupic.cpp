@@ -1,0 +1,25 @@
+FROM alpine:3.11.5
+
+RUN echo 'https://mirrors.aliyun.com/alpine/v3.11/main/' > /etc/apk/repositories \
+ && echo 'https://mirrors.aliyun.com/alpine/v3.11/community/' >> /etc/apk/repositories
+
+RUN apk add --update  \
+    cmake \
+    make \
+    g++ \
+    git
+
+ADD . /usr/local/src/htm.core
+WORKDIR /usr/local/src/htm.core
+
+RUN mkdir -p build/scripts && \
+    cd build/scripts && \
+    cmake ../.. -DCMAKE_BUILD_TYPE=Release && \
+    make -j4 && make install
+
+
+FROM alpine:3.11.5
+
+COPY --from=0 /usr/local/src/htm.core/build/Release/bin/rest_server /usr/bin/rest_server
+
+ENTRYPOINT ["/usr/bin/rest_server"]
