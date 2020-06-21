@@ -20,6 +20,8 @@ RUN mkdir -p build/scripts && \
 
 FROM alpine:3.11.5
 
+RUN apk add libstdc++
+
 COPY --from=0 /usr/local/src/htm.core/build/Release/bin/rest_server /usr/bin/rest_server
 
 ENTRYPOINT ["/usr/bin/rest_server"]
