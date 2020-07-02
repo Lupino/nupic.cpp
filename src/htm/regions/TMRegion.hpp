@@ -83,6 +83,7 @@ public:
     ar(cereal::make_nvp("sequencePos", args_.sequencePos));
     ar(cereal::make_nvp("iter", args_.iter));
     ar(cereal::make_nvp("orColumnOutputs", args_.orColumnOutputs));
+    ar(cereal::make_nvp("anomalyMode", args_.anomalyMode));
     ar(cereal::make_nvp("init", init));
     if (init) {
       // Save the algorithm state
@@ -112,6 +113,7 @@ public:
     ar(cereal::make_nvp("sequencePos", args_.sequencePos));
     ar(cereal::make_nvp("iter", args_.iter));
     ar(cereal::make_nvp("orColumnOutputs", args_.orColumnOutputs));
+    ar(cereal::make_nvp("anomalyMode", args_.anomalyMode));
     ar(cereal::make_nvp("init", init));
 
     args_.outputWidth = (args_.orColumnOutputs)?args_.numberOfCols
@@ -174,6 +176,7 @@ private:
     // parameters used by this class and not passed on
     bool learningMode;
     bool orColumnOutputs;
+    UInt32 anomalyMode;
 
     // some local variables
     UInt32 padding; // to prevent the next field from spanning 8 byte boundary.

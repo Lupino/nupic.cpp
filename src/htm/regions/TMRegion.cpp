@@ -58,6 +58,7 @@ TMRegion::TMRegion(const ValueMap &params, Region *region)
   args_.checkInputs = params.getScalarT<bool>("checkInputs", true);
   args_.orColumnOutputs = params.getScalarT<bool>("orColumnOutputs", false);
   args_.externalPredictiveInputs = 0;  // will be obtained from externalPredictiveInputs inputs dimensions.
+  args_.anomalyMode = params.getScalarT<UInt32>("anomalyMode", 1u);
 
   // variables used by this class and not passed on
   args_.learningMode = params.getScalarT<bool>("learningMode", true);
@@ -171,7 +172,8 @@ void TMRegion::initialize() {
       args_.initialPermanence, args_.connectedPermanence, args_.minThreshold,
       args_.maxNewSynapseCount, args_.permanenceIncrement, args_.permanenceDecrement,
       args_.predictedSegmentDecrement, args_.seed, args_.maxSegmentsPerCell,
-      args_.maxSynapsesPerSegment, args_.checkInputs, args_.externalPredictiveInputs);
+      args_.maxSynapsesPerSegment, args_.checkInputs, args_.externalPredictiveInputs,
+      (TemporalMemory :: ANMode)args_.anomalyMode);
   tm_.reset(tm);
 
   args_.iter = 0;
@@ -481,6 +483,17 @@ Spec *TMRegion::createSpec() {
                     "false",             // defaultValue
                     ParameterSpec::CreateAccess)); // access
 
+  ns->parameters.add(
+      "anomalyMode",
+      ParameterSpec("anomalyMode how is `TM.anomaly` computed. "
+                    "Options ANMode {DISABLED = 0, RAW = 1, LIKELIHOOD = 2, LOGLIKELIHOOD = 3}."
+                    "Default is 1",
+                    NTA_BasicType_UInt32,   // type
+                    1,                      // elementCount
+                    "",                     // constraints
+                    "1",                    // defaultValue
+                    ParameterSpec::CreateAccess)); // access
+
 
   ///////////// Inputs and Outputs ////////////////
   /* ----- inputs ------- */
@@ -655,6 +668,8 @@ UInt32 TMRegion::getParameterUInt32(const std::string &name, Int64 index) {
     }
     if (name == "outputWidth")
       return args_.outputWidth;
+    if (name == "anomalyMode")
+      return (UInt32)args_.anomalyMode;
 
   return this->RegionImpl::getParameterUInt32(name, index); // default
 }
@@ -848,6 +863,7 @@ bool TMRegion::operator==(const RegionImpl &o) const {
   if (args_.sequencePos != other.args_.sequencePos) return false;
   if (args_.iter != other.args_.iter) return false;
   if (args_.orColumnOutputs != other.args_.orColumnOutputs) return false;
+  if (args_.anomalyMode != other.args_.anomalyMode) return false;
   if (dim_ != other.dim_) return false;  // from RegionImpl
   if ((tm_ && !other.tm_) || (other.tm_ && !tm_)) return false;
   if (tm_ && (*tm_ != *other.tm_)) return false;

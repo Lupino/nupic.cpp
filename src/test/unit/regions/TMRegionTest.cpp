@@ -71,7 +71,7 @@ static bool verbose = false; // turn this on to print extra stuff for debugging 
 
 // The following string should contain a valid expected Spec - manually
 // verified.
-#define EXPECTED_SPEC_COUNT 18 // The number of parameters expected in the TMRegion Spec
+#define EXPECTED_SPEC_COUNT 19 // The number of parameters expected in the TMRegion Spec
 
 using namespace htm;
 
