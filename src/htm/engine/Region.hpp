@@ -143,7 +143,7 @@ public:
   Real32 getParameterReal32(const std::string &name) const;
   Real64 getParameterReal64(const std::string &name) const;
   bool getParameterBool(const std::string &name) const;
-  std::string getParameterJSON(const std::string &name) const;
+  std::string getParameterJSON(const std::string &name, const std::string &tag) const;
 
   /**
    * Set the parameter value of a specific type.
@@ -225,7 +225,7 @@ public:
    */
   void setParameterArray(const std::string &name, const Array &array);
 
-	
+
   /**
    * Get the number of elements in the array parameter's value.
    *
@@ -267,7 +267,7 @@ public:
    *
    * @see setParameterString()
    */
-  std::string getParameterString(const std::string &name);
+  std::string getParameterString(const std::string &name) const;
 
   /**
    * Tells whether the parameter is shared.
@@ -325,12 +325,6 @@ public:
    *			  region->getOutput(name)->getData();
    */
   virtual const Array &getOutputData(const std::string &outputName) const;
-	
-	/**
-	 * Set the input data.  The input buffer type remains, data is copied in
-	 * with conversion if needed.
-	 */
-	virtual void setInputData(const std::string &inputName, const Array& data);
 
 
   /**
@@ -484,7 +478,7 @@ public:
     getDims_(outDims, inDims);
     ar(cereal::make_nvp("output_dims", outDims));
     ar(cereal::make_nvp("input_dims",  inDims));
-		
+
 		// save the output buffers
     std::map<std::string, Array> buffers;
     getOutputBuffers_(buffers);

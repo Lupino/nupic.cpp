@@ -38,6 +38,7 @@ Methods related to inputs and outputs are in Region_io.cpp
 #include <htm/engine/Spec.hpp>
 #include <htm/ntypes/Array.hpp>
 #include <htm/ntypes/BasicType.hpp>
+#include <htm/types/Sdr.hpp>
 #include <htm/utils/Log.hpp>
 
 namespace htm {
@@ -69,11 +70,11 @@ Region::Region(const std::string &name, const std::string &nodeType, ValueMap &v
   spec_ = factory.getSpec(nodeType);
   createInputsAndOutputs_();
   impl_.reset(factory.createRegionImpl(nodeType, vm, this));
-  
+
   //std::cerr << "Region created " << getName() << "=" << nodeType << "\n";
   //auto outputs = getOutputs();
   //for (auto out : outputs) std::cerr << "   " << getName() << "." << out.first << "\n";
-  
+
 }
 
 Region::Region(Network *net) {
@@ -125,7 +126,7 @@ bool Region::hasOutgoingLinks() const {
 Region::~Region() {
   if (initialized_)
     uninitialize();
-    
+
   removeAllIncomingLinks();  // Note: link objects are stored on the Input object.
   outputs_.clear();
 
@@ -445,16 +446,6 @@ const Array& Region::getInputData(const std::string &inputName) const {
   const Array & data = ii->second->getData();
   return data;
 }
-void Region::setInputData(const std::string &inputName, const Array& data) {
-  auto ii = inputs_.find(inputName);
-  if (ii == inputs_.end())
-    NTA_THROW << "setInputData -- unknown input '" << inputName << "' on region "
-              << getName();
-  std::shared_ptr<Input> in = ii->second;
-	in->setDimensions( { (UInt)data.getCount() } );
-  Array& a = in->getData();
-	data.convertInto(a);
-}
 
 void Region::prepareInputs() {
   // Ask each input to prepare itself
@@ -490,8 +481,8 @@ void Region::setParameterReal64(const std::string &name, Real64 value) {
   impl_->setParameterReal64(name, (Int64)-1, value);
 }
 
-void Region::setParameterBool(const std::string &name, bool value) { 
-impl_->setParameterBool(name, (Int64)-1, value); 
+void Region::setParameterBool(const std::string &name, bool value) {
+impl_->setParameterBool(name, (Int64)-1, value);
 }
 
 void Region::setParameterJSON(const std::string &name, const std::string &value) {
@@ -548,41 +539,84 @@ Real64 Region::getParameterReal64(const std::string &name) const { return impl_-
 
 bool Region::getParameterBool(const std::string &name) const { return impl_->getParameterBool(name, (Int64)-1); }
 
-std::string Region::getParameterJSON(const std::string &name) const {
+std::string Region::getParameterJSON(const std::string &name, const std::string &tag = std::string()) const {
+  NTA_BasicType type = NTA_BasicType_Last; // initialize to an invalid type.
   Value vm;
   try {
-    NTA_BasicType type = spec_->parameters.getByName(name).dataType;
-    switch (type) {
-    case NTA_BasicType_Int32:
-      vm = getParameterInt32(name);
-      break;
-    case NTA_BasicType_UInt32:
-      vm = getParameterUInt32(name);
-      break;
-    case NTA_BasicType_Int64:
-      vm = getParameterInt64(name);
-      break;
-    case NTA_BasicType_UInt64:
-      vm = getParameterUInt64(name);
-      break;
-    case NTA_BasicType_Real32:
-      vm = getParameterReal32(name);
-      break;
-    case NTA_BasicType_Real64:
-      vm = getParameterReal64(name);
-      break;
-    case NTA_BasicType_Bool:
-      vm = getParameterBool(name);
-      break;
+    type = spec_->parameters.getByName(name).dataType;
+    size_t dim = spec_->parameters.getByName(name).count;
+    if (dim == 1) {
+      // This is a scalar value, not an array.
 
-    default:
-      NTA_THROW << "Unknow parameter type '" + std::string(BasicType::getName(type)) + "'";
-      break;
+      switch (type) {
+      case NTA_BasicType_Int32:
+        vm = getParameterInt32(name);
+        break;
+      case NTA_BasicType_UInt32:
+        vm = getParameterUInt32(name);
+        break;
+      case NTA_BasicType_Int64:
+        vm = getParameterInt64(name);
+        break;
+      case NTA_BasicType_UInt64:
+        vm = getParameterUInt64(name);
+        break;
+      case NTA_BasicType_Real32:
+        vm = getParameterReal32(name);
+        break;
+      case NTA_BasicType_Real64:
+        vm = getParameterReal64(name);
+        break;
+      case NTA_BasicType_Bool:
+        vm = getParameterBool(name);
+        break;
+      case NTA_BasicType_Str:
+        vm = getParameterString(name);
+        break;
+
+      default:
+        NTA_THROW << "Unknow parameter type '" + std::string(BasicType::getName(type)) + "'";
+        break;
+      }
+      if (tag.empty())
+        return vm.to_json();
+      else
+        return "{\"" + tag + "\": " + vm.to_json() + ", \"type\": \"" + std::string(BasicType::getName(type)) + "\"}";
+
+    } else {
+      // This is an array, not a scalar.
+      Array a;
+      getParameterArray(name, a);
+      std::string data = a.toJSON();
+      if (tag.empty())
+        return data;
+
+      std::string dimStr;
+      type = a.getType();
+      if (type == NTA_BasicType_SDR) {
+        const SDR& sdr = a.getSDR();
+        auto d = sdr.dimensions;
+        dimStr = "[";
+        bool first = true;
+        for (UInt item : d) {
+          if (!first)
+            dimStr.append(", ");
+          first = false;
+          dimStr.append(std::to_string(item));
+        }
+        dimStr.append("]");
+      }
+      else
+        dimStr = "[" + std::to_string(a.getCount()) + "]";
+
+      return "{\"" + tag + "\": " + data +
+              ", \"type\": \"" + std::string(BasicType::getName(type)) +
+              ", \"dim\": " + dimStr + "}";
+
     }
   } catch (Exception &e) {
     NTA_THROW << "Error setting parameter " + getName() + "." + name + "; " + e.getMessage();
   }
-  return vm.to_json();
 }
 
 // array parameters
@@ -603,7 +637,7 @@ void Region::setParameterString(const std::string &name, const std::string &s) {
   impl_->setParameterString(name, (Int64)-1, s);
 }
 
-std::string Region::getParameterString(const std::string &name) {
+std::string Region::getParameterString(const std::string &name) const {
   return impl_->getParameterString(name, (Int64)-1);
 }
 

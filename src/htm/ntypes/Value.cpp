@@ -21,6 +21,7 @@
 #include <htm/ntypes/BasicType.hpp>
 #include <htm/ntypes/Value.hpp>
 #include <htm/utils/Log.hpp>
+#include <htm/os/Path.hpp>  // for trim()
 
 #include <algorithm> // transform
 #include <cerrno>
@@ -199,50 +200,6 @@ Value &Value::parse(const std::string &yaml_string) {
   return *this;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////
-#else // YAML_PARSER_yamlcpp
-
-// All interface for yaml-cpp parser must be encapulated in this section.
-#include <yaml-cpp/yaml.h>
-static void setNode(Value &val, const YAML::Node &node);
-
-// Parse YAML or JSON string document into the tree.
-Value &Value::parse(const std::string &yaml_string) {
-  if (assigned_)
-    return assigned_->parse(yaml_string);
-  // If this Value node is being re-used (like in unit tests)
-  // we need to clear variables.
-  vec_.clear();
-  map_.clear();
-  scalar_ = "";
-  type_ = Value::Category::Empty;
-  parent_ = nullptr;
-
-  YAML::Node node = YAML::Load(yaml_string);
-  // walk the tree and copy data into our structure
-
-  setNode(*this, node);
-  this->cleanup();
-  return *this;
-}
-
-// Copy a yaml-cpp node to a Value node recursively.
-static void setNode(Value &val, const YAML::Node &node) {
-  std::pair<std::map<std::string, Value>::iterator, bool> ret;
-  if (node.IsScalar()) {
-    val = node.as<std::string>();
-  } else if (node.IsSequence()) {
-    for (size_t i = 0; i < node.size(); i++) {
-      setNode(val[i], node[i]);
-    }
-  } else if (node.IsMap()) {
-    for (auto it = node.begin(); it != node.end(); it++) {
-      std::string key = it->first.as<std::string>();
-      setNode(val[key], it->second);
-    }
-  }
-}
-
 #endif // YAML_PARSER_yamlcpp
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -366,11 +323,13 @@ const Value &Value::operator[](size_t index) const {
 }
 
 std::string Value::str() const {
-  NTA_CHECK(core_->type_ == Value::Category::Scalar);
+  NTA_CHECK(core_->type_ == Value::Category::Scalar)
+     << ((core_->type_ == Value::Category::Empty) ? ("Key '" + core_->key_ + "' not found.") : "Not a scalar.");
   return core_->scalar_;
 }
 const char *Value::c_str() const {
-  NTA_CHECK(core_->type_ == Value::Category::Scalar);
+  NTA_CHECK(core_->type_ == Value::Category::Scalar) 
+    << ((core_->type_ == Value::Category::Empty)?("Key '"+core_->key_+"' not found."):"Not a scalar.");
   return core_->scalar_.c_str();
 }
 
@@ -619,42 +578,67 @@ bool Value::asBool() const {
 }
 
 /**
- * a local function to apply escapes for a JSON string.
- See: http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf
+ * A function to apply escapes for a JSON string.
+ * It is assumed that std::strings are UTF8.
+ * See: http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf
  */
-static void escape_json(std::ostream &o, const std::string &s) {
+std::string Value::json_string(const std::string &str) {
+  std::string s = Path::trim(str);
+  if (s.empty()) 
+    return "null";  // The JSON identifier for empty.
+    
+  if (std::regex_match(s, std::regex("^[-+]?[0-9]+([.][0-9]+)?$"))) {
+    // This is numeric so does not need quotes or escapes.
+    return s;
+  }
+  
+  if (s == "true" || s == "false")
+    // This is boolean so soes not need quotes or escapes
+    return s;
+  
+  std::string o;
+  o.push_back('\"');
   for (auto c = s.cbegin(); c != s.cend(); c++) {
     switch (*c) {
     case '"':
-      o << "\\\"";
+      o.push_back('\\');
+      o.push_back('\"');
       break;
     case '\\':
-      o << "\\\\";
+      o.push_back('\\');
+      o.push_back('\\');
       break;
     case '\b':
-      o << "\\b";
+      o.push_back('\\');
+      o.push_back('b');
       break;
     case '\f':
-      o << "\\f";
+      o.push_back('\\');
+      o.push_back('f');
       break;
     case '\n':
-      o << "\\n";
+      o.push_back('\\');
+      o.push_back('n');
       break;
     case '\r':
-      o << "\\r";
       break;
     case '\t':
-      o << "\\t";
+      o.push_back('\\');
+      o.push_back('t');
       break;
     default:
       if (*c <= '\x1f' || *c == '\x7f') { 
         //control characters -> convert to hex.
-        o << "\\u" << std::hex << std::setw(4) << std::setfill('0') << (int)*c;
+        char buf[10];
+        snprintf(buf, sizeof(buf), "\\u%04x", (unsigned int)*c);
+        o.append(buf);
       } else {
-        o << *c; 
+        o.push_back(*c); 
       }
     }
   }
+  o.push_back('\"');
+  return o;
 }
 
 static void to_json(std::ostream &f, const htm::Value &v) {
@@ -664,14 +648,7 @@ static void to_json(std::ostream &f, const htm::Value &v) {
   case Value::Empty:
     return;
   case Value::Scalar:
-    s = v.str();
-    if (std::regex_match(s, std::regex("^[-+]?[0-9]+([.][0-9]+)?$"))) {
-      escape_json(f, s);
-    } else {
-      f << '"';
-      escape_json(f, s);
-      f << '"';
-    }
+    f << Value::json_string(v.str());
     break;
   case Value::Sequence:
     f << "[";
@@ -691,7 +668,7 @@ static void to_json(std::ostream &f, const htm::Value &v) {
         f << ", ";
       first = false;
       const Value &n = v[i];
-      f << n.key() << ": ";
+      f << Value::json_string(n.key()) << ": ";
       to_json(f, n);
     }
     f << "}";
