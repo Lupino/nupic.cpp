@@ -83,6 +83,21 @@ void RegionImplFactory::unregisterRegion(const std::string nodeType) {
   }
 }
 
+std::string RegionImplFactory::getRegistrations() {
+  RegionImplFactory& instance = getInstance();  // force load of built-ins.
+  
+  std::string json = "{\n";
+  for (auto iter = instance.regionTypeMap.begin(); iter != instance.regionTypeMap.end(); ++iter) {
+     if (iter->first != "RawInput") {
+       if (json.size() > 3) json += ",\n";
+       json += "  \""+iter->first+"\": "
+               "{\"class\": \""+iter->second->className()+"\""
+               ", \"module\": \""+iter->second->moduleName()+"\"}";
+     }
+  }
+  json += "\n}";
+  return json;
+}
 
 RegionImplFactory &RegionImplFactory::getInstance() {
   static RegionImplFactory instance;
@@ -192,7 +207,7 @@ RegionImpl *RegionImplFactory::deserializeRegionImpl(const std::string nodeType,
 
 
 
-std::shared_ptr<Spec>& RegionImplFactory::getSpec(const std::string nodeType) {
+std::shared_ptr<Spec> RegionImplFactory::getSpec(const std::string nodeType) {
   auto it = regionSpecMap.find(nodeType);
   if (it == regionSpecMap.end()) {
 	NTA_THROW << "getSpec() -- unknown node type: '" << nodeType

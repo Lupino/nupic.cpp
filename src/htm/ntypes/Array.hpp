@@ -85,7 +85,7 @@
 //   constructor A(sdr)               - Buffer initialized from SDR
 //   constructor A(vector)            - Buffer initialized from vector
 //   B = A;                           - Shallow copy, B has same, type, buffer, size
-//   B = A.copy()                     - Creates B as a copy of A.
+//   B = A.copy()                     - Creates B as a deep copy of A.
 //   A.populate(vector)               - fills A from vector, with conversion, A retains type.
 //
 //
@@ -184,7 +184,7 @@ public:
   /**
    * Initialize by copying in from a raw C-type buffer.  See ArrayBase
    */
-  Array(NTA_BasicType type, void *buffer, size_t count)
+  Array(NTA_BasicType type, const void *buffer, size_t count)
       : ArrayBase(type, buffer, count) {}
 
   /**
